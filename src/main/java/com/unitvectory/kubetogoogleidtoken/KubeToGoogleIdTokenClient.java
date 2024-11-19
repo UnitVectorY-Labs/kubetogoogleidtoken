@@ -27,6 +27,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
@@ -51,20 +52,20 @@ public class KubeToGoogleIdTokenClient {
     private final Gson gson = new Gson();
 
     /**
-     * Generates an ID token for the specified audience.
+     * Generates a GCP ID token for the specified audience.
      *
      * @param request The KubeToGoogleIdTokenRequest containing the audience.
      * @return The IdTokenResponse containing the ID token.
-     * @throws Exception If any step in the token generation process fails.
+     * @throws KubeToGoogleIdTokenException If any step in the token generation
+     *                                      process fails.
+     * @throws IllegalArgumentException     If the audience is not specified.
      */
-    public KubeToGoogleIdTokenResponse getIdToken(KubeToGoogleIdTokenRequest request) throws Exception {
+    public KubeToGoogleIdTokenResponse getIdToken(KubeToGoogleIdTokenRequest request) {
         if (request == null || request.getAudience() == null || request.getAudience().isEmpty()) {
             throw new IllegalArgumentException("Audience must be specified in the IdTokenRequest.");
         }
 
-        // TODO: Failures should really throw a KubeToGoogleIdTokenException
-
-        // Phase 1: Retrieve Kubernetes Token
+        // Phase 1: Retrieve Kubernetes Token from the file system
         String k8sToken = retrieveKubernetesToken();
 
         // Phase 2: Exchange Kubernetes Token for Access Token via STS
@@ -73,33 +74,28 @@ public class KubeToGoogleIdTokenClient {
                 projectNumber, workloadIdentityPool, workloadProvider);
         String accessToken = exchangeTokenWithSTS(k8sToken, stsAudience);
 
-        // Phase 3: Generate Identity Token via IAM Credentials
+        // Phase 3: Generate Identity Token via IAM Credentials by GCP Impersonating
+        // Service Account
         String idToken = generateIdentityToken(accessToken, request.getAudience());
 
-        return KubeToGoogleIdTokenResponse.builder()
-                .idToken(idToken)
-                .build();
+        return KubeToGoogleIdTokenResponse.builder().idToken(idToken).build();
     }
 
-    /**
-     * Reads the Kubernetes token from the specified file path.
-     *
-     * @return The Kubernetes token as a String.
-     * @throws IOException If reading the file fails.
-     */
-    private String retrieveKubernetesToken() throws IOException {
-        return Files.readString(Paths.get(k8sTokenPath));
+    private String retrieveKubernetesToken() {
+        try {
+            Path tokenPath = Paths.get(k8sTokenPath);
+            if (!Files.exists(tokenPath)) {
+                throw new KubeToGoogleIdTokenException("Kubernetes token file does not exist: " + k8sTokenPath);
+            }
+            return Files.readString(tokenPath);
+        } catch (KubeToGoogleIdTokenException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new KubeToGoogleIdTokenException("Failed to read Kubernetes token file: " + k8sTokenPath, e);
+        }
     }
 
-    /**
-     * Exchanges the Kubernetes token for an access token using STS.
-     *
-     * @param subjectToken The Kubernetes token.
-     * @param audience     The audience for the STS request.
-     * @return The access token.
-     * @throws IOException If the HTTP request fails.
-     */
-    private String exchangeTokenWithSTS(String subjectToken, String audience) throws IOException {
+    private String exchangeTokenWithSTS(String subjectToken, String audience) {
         JsonObject stsRequest = new JsonObject();
         stsRequest.addProperty("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange");
         stsRequest.addProperty("audience", audience);
@@ -108,85 +104,79 @@ public class KubeToGoogleIdTokenClient {
         stsRequest.addProperty("subject_token_type", "urn:ietf:params:oauth:token-type:jwt");
         stsRequest.addProperty("subject_token", subjectToken);
 
-        String response = sendPostRequest(STS_URL, stsRequest.toString(), null);
-        JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
+        try {
+            String response = sendPostRequest(STS_URL, stsRequest.toString(), null);
+            JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
-        if (!jsonResponse.has("access_token")) {
-            throw new IOException("STS response does not contain access_token.");
+            if (!jsonResponse.has("access_token")) {
+                throw new KubeToGoogleIdTokenException("STS response does not contain access_token.");
+            }
+
+            return jsonResponse.get("access_token").getAsString();
+        } catch (KubeToGoogleIdTokenException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new KubeToGoogleIdTokenException("Failed to exchange Kubernetes token with STS.", e);
         }
-
-        return jsonResponse.get("access_token").getAsString();
     }
 
-    /**
-     * Generates an ID token using the IAM Credentials API.
-     *
-     * @param accessToken The access token obtained from STS.
-     * @param audience    The audience for which the ID token is requested.
-     * @return The ID token.
-     * @throws IOException If the HTTP request fails.
-     */
-    private String generateIdentityToken(String accessToken, String audience) throws IOException {
+    private String generateIdentityToken(String accessToken, String audience) {
         String iamUrl = String.format(IAM_URL_TEMPLATE, serviceAccountEmail);
 
         JsonObject iamRequest = new JsonObject();
         iamRequest.addProperty("audience", audience);
         iamRequest.addProperty("includeEmail", true);
 
-        String response = sendPostRequest(iamUrl, iamRequest.toString(), accessToken);
-        JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
+        try {
+            String response = sendPostRequest(iamUrl, iamRequest.toString(), accessToken);
+            JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
-        if (!jsonResponse.has("token")) {
-            throw new IOException("IAM Credentials response does not contain token.");
+            if (!jsonResponse.has("token")) {
+                throw new KubeToGoogleIdTokenException("IAM Credentials response does not contain token.");
+            }
+
+            return jsonResponse.get("token").getAsString();
+        } catch (KubeToGoogleIdTokenException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new KubeToGoogleIdTokenException("Failed to generate ID token using IAM Credentials API.", e);
         }
-
-        return jsonResponse.get("token").getAsString();
     }
 
-    /**
-     * Sends a POST request to the specified URL with the given payload and access
-     * token.
-     *
-     * @param urlStr      The URL to send the request to.
-     * @param payload     The JSON payload as a String.
-     * @param accessToken The access token for authorization (nullable).
-     * @return The response body as a String.
-     * @throws IOException If the HTTP request fails.
-     */
-    private String sendPostRequest(String urlStr, String payload, String accessToken) throws IOException {
-        URL url = new URL(urlStr);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setDoOutput(true);
-        conn.setRequestProperty("Content-Type", "application/json");
+    private String sendPostRequest(String urlStr, String payload, String accessToken) {
+        try {
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
 
-        if (accessToken != null && !accessToken.isEmpty()) {
-            conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-        }
-
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(payload.getBytes());
-            os.flush();
-        }
-
-        int responseCode = conn.getResponseCode();
-        InputStreamReader isr;
-        if (responseCode >= 200 && responseCode < 300) {
-            isr = new InputStreamReader(conn.getInputStream());
-        } else {
-            isr = new InputStreamReader(conn.getErrorStream());
-        }
-
-        try (BufferedReader in = new BufferedReader(isr)) {
-            String inputLine;
-            StringBuilder response = new StringBuilder();
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
+            if (accessToken != null && !accessToken.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + accessToken);
             }
-            if (responseCode < 200 || responseCode >= 300) {
-                throw new IOException("HTTP " + responseCode + ": " + response.toString());
+
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(payload.getBytes());
+                os.flush();
             }
-            return response.toString();
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                throw new KubeToGoogleIdTokenException("HTTP request failed with response code: " + responseCode);
+            }
+
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                StringBuilder response = new StringBuilder();
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                return response.toString();
+            }
+        } catch (KubeToGoogleIdTokenException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new KubeToGoogleIdTokenException("HTTP request to " + urlStr + " failed.", e);
         }
     }
 }

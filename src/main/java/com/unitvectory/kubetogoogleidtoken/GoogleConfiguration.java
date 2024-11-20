@@ -13,6 +13,7 @@
  */
 package com.unitvectory.kubetogoogleidtoken;
 
+import lombok.Builder;
 import lombok.Data;
 import com.google.gson.annotations.SerializedName;
 
@@ -23,6 +24,7 @@ import com.google.gson.annotations.SerializedName;
  * @author Jared Hatfield (UnitVectorY Labs)
  */
 @Data
+@Builder
 class GoogleConfiguration {
 
     @SerializedName("universe_domain")
@@ -45,6 +47,7 @@ class GoogleConfiguration {
     private String serviceAccountImpersonationUrl;
 
     @Data
+    @Builder
     public static class CredentialSource {
 
         private String file;
@@ -52,6 +55,7 @@ class GoogleConfiguration {
         private Format format;
 
         @Data
+        @Builder
         public static class Format {
 
             private String type;

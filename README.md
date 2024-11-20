@@ -42,10 +42,10 @@ The path to the following JSON file can be provided with the `GOOGLE_APPLICATION
     "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
     "token_url": "https://sts.googleapis.com/v1/token",
     "credential_source": {
-    "file": "/var/run/secrets/tokens/gcp-token",
-    "format": {
-        "type": "text"
-    }
+        "file": "/var/run/secrets/tokens/gcp-token",
+        "format": {
+            "type": "text"
+        }
     },
     "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/account@example.iam.gserviceaccount.com:generateAccessToken"
 }

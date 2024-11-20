@@ -17,9 +17,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.ByteArrayInputStream;
+import java.net.HttpURLConnection;
+import java.io.OutputStream;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -28,7 +33,7 @@ import static org.mockito.Mockito.*;
  * 
  * @author Jared Hatfield (UnitVectorY Labs)
  */
-public class KubeToGoogleIdTokenClientTest {
+class KubeToGoogleIdTokenClientTest {
 
     private KubeToGoogleIdTokenClient client;
 
@@ -48,9 +53,9 @@ public class KubeToGoogleIdTokenClientTest {
 
         client = KubeToGoogleIdTokenClient.builder()
                 .k8sTokenPath(tokenPath.toAbsolutePath().toString())
-                .projectNumber("377054373935")
-                .workloadIdentityPool("minikube")
-                .workloadProvider("minikube")
+                .projectNumber("0000000000")
+                .workloadIdentityPool("my-pool")
+                .workloadProvider("my-provider")
                 .serviceAccountEmail("fake@example.com").build();
     }
 
@@ -58,7 +63,7 @@ public class KubeToGoogleIdTokenClientTest {
     public void testClientConstruction() {
         assertEquals(tokenPath.toAbsolutePath().toString(), client.getK8sTokenPath());
         assertEquals(
-                "//iam.googleapis.com/projects/377054373935/locations/global/workloadIdentityPools/minikube/providers/minikube",
+                "//iam.googleapis.com/projects/0000000000/locations/global/workloadIdentityPools/my-pool/providers/my-provider",
                 client.getStsAudience());
         assertEquals("https://sts.googleapis.com/v1/token", client.getTokenUrl());
         assertEquals(
@@ -94,5 +99,26 @@ public class KubeToGoogleIdTokenClientTest {
 
         String idToken = spyClient.generateIdentityToken("fake-access-token", "fake-audience");
         assertEquals("fake-id-token", idToken);
+    }
+
+    @Test
+    public void testSendPostRequest() throws Exception {
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+        OutputStream mockOutputStream = mock(OutputStream.class);
+
+        doReturn(mockConnection).when(spyClient).createConnection(anyString());
+        when(mockConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
+        when(mockConnection.getInputStream())
+                .thenReturn(new ByteArrayInputStream("{\"token\":\"fake-response\"}".getBytes()));
+        doReturn(mockOutputStream).when(mockConnection).getOutputStream();
+
+        String response = spyClient.sendPostRequest("https://example.com", "{\"key\":\"value\"}");
+        assertEquals("{\"token\":\"fake-response\"}", response);
+
+        verify(mockConnection).setRequestMethod("POST");
+        verify(mockConnection).setDoOutput(true);
+        verify(mockConnection).setRequestProperty("Content-Type", "application/json");
+        verify(mockOutputStream).write(any(byte[].class));
     }
 }

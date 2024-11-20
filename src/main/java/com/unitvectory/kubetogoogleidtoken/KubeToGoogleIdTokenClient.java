@@ -251,10 +251,14 @@ public class KubeToGoogleIdTokenClient {
         return sendPostRequest(urlStr, payload, null);
     }
 
+    HttpURLConnection createConnection(String urlStr) throws IOException {
+        URL url = new URL(urlStr);
+        return (HttpURLConnection) url.openConnection();
+    }
+
     String sendPostRequest(String urlStr, String payload, String accessToken) {
         try {
-            URL url = new URL(urlStr);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            HttpURLConnection conn = createConnection(urlStr);
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");

@@ -211,4 +211,40 @@ class KubeToGoogleIdTokenClientTest {
         verify(mockConnection).setRequestProperty("Content-Type", "application/json");
         verify(mockOutputStream).write(any(byte[].class));
     }
+
+    @Test
+    void testSendPostRequestNullAccessToken() throws Exception {
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+        OutputStream mockOutputStream = mock(OutputStream.class);
+
+        doReturn(mockConnection).when(spyClient).createConnection(anyString());
+        when(mockConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_FORBIDDEN);
+        when(mockConnection.getErrorStream())
+                .thenReturn(new ByteArrayInputStream("{\"error\":\"fake-error\"}".getBytes()));
+        doReturn(mockOutputStream).when(mockConnection).getOutputStream();
+
+        KubeToGoogleIdTokenException thrown = assertThrows(KubeToGoogleIdTokenException.class, () -> {
+            spyClient.sendPostRequest("https://example.com", "{\"key\":\"value\"}", null);
+        });
+        assertEquals("HTTP request failed with response code: 403", thrown.getMessage());
+    }
+
+    @Test
+    void testSendPostRequestEmptyAccessToken() throws Exception {
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        HttpURLConnection mockConnection = mock(HttpURLConnection.class);
+        OutputStream mockOutputStream = mock(OutputStream.class);
+
+        doReturn(mockConnection).when(spyClient).createConnection(anyString());
+        when(mockConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_FORBIDDEN);
+        when(mockConnection.getErrorStream())
+                .thenReturn(new ByteArrayInputStream("{\"error\":\"fake-error\"}".getBytes()));
+        doReturn(mockOutputStream).when(mockConnection).getOutputStream();
+
+        KubeToGoogleIdTokenException thrown = assertThrows(KubeToGoogleIdTokenException.class, () -> {
+            spyClient.sendPostRequest("https://example.com", "{\"key\":\"value\"}", "");
+        });
+        assertEquals("HTTP request failed with response code: 403", thrown.getMessage());
+    }
 }

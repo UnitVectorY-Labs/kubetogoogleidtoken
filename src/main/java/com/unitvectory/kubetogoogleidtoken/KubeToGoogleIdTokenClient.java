@@ -200,16 +200,17 @@ public class KubeToGoogleIdTokenClient {
     }
 
     String exchangeTokenWithSTS(String subjectToken, String audience) {
-        JsonObject stsRequest = new JsonObject();
-        stsRequest.addProperty("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange");
-        stsRequest.addProperty("audience", audience);
-        stsRequest.addProperty("scope", "https://www.googleapis.com/auth/cloud-platform");
-        stsRequest.addProperty("requested_token_type", "urn:ietf:params:oauth:token-type:access_token");
-        stsRequest.addProperty("subject_token_type", "urn:ietf:params:oauth:token-type:jwt");
-        stsRequest.addProperty("subject_token", subjectToken);
+        GoogleAccessTokenRequest request = GoogleAccessTokenRequest.builder()
+                .grantType("urn:ietf:params:oauth:grant-type:token-exchange")
+                .audience(audience)
+                .scope("https://www.googleapis.com/auth/cloud-platform")
+                .requestedTokenType("urn:ietf:params:oauth:token-type:access_token")
+                .subjectTokenType("urn:ietf:params:oauth:token-type:jwt")
+                .subjectToken(subjectToken)
+                .build();
 
         try {
-            String response = sendPostRequest(this.tokenUrl, stsRequest.toString());
+            String response = sendPostRequest(this.tokenUrl, gson.toJson(request));
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (!jsonResponse.has("access_token")) {
@@ -225,12 +226,13 @@ public class KubeToGoogleIdTokenClient {
     }
 
     String generateIdentityToken(String accessToken, String audience) {
-        JsonObject iamRequest = new JsonObject();
-        iamRequest.addProperty("audience", audience);
-        iamRequest.addProperty("includeEmail", true);
+        GoogleIdentityTokenRequest request = GoogleIdentityTokenRequest.builder()
+                .audience(audience)
+                .includeEmail(true)
+                .build();
 
         try {
-            String response = sendPostRequest(this.serviceAccountImpersonationUrl, iamRequest.toString(), accessToken);
+            String response = sendPostRequest(this.serviceAccountImpersonationUrl, gson.toJson(request), accessToken);
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (!jsonResponse.has("token")) {

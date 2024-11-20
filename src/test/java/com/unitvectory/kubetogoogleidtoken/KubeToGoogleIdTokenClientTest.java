@@ -16,7 +16,11 @@ package com.unitvectory.kubetogoogleidtoken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+
+import com.google.gson.Gson;
+import com.unitvectory.jsonassertify.JSONAssert;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +44,8 @@ import static org.mockito.Mockito.when;
  * @author Jared Hatfield (UnitVectorY Labs)
  */
 class KubeToGoogleIdTokenClientTest {
+
+    private static final Gson gson = new Gson();
 
     private KubeToGoogleIdTokenClient client;
 
@@ -90,11 +96,29 @@ class KubeToGoogleIdTokenClientTest {
     @Test
     void testExchangeTokenWithSTS() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
-        doReturn("{\"access_token\":\"fake-access-token\"}").when(spyClient).sendPostRequest(anyString(),
-                anyString());
+
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+
+        doReturn("{\"access_token\":\"fake-access-token\"}").when(spyClient).sendPostRequest(
+                urlCaptor.capture(),
+                payloadCaptor.capture());
 
         String accessToken = spyClient.exchangeTokenWithSTS("fake-token", "fake-audience");
         assertEquals("fake-access-token", accessToken);
+
+        assertEquals("https://sts.googleapis.com/v1/token", urlCaptor.getValue());
+
+        GoogleAccessTokenRequest expectedTokenRequest = GoogleAccessTokenRequest.builder()
+                .grantType("urn:ietf:params:oauth:grant-type:token-exchange")
+                .audience("fake-audience")
+                .scope("https://www.googleapis.com/auth/cloud-platform")
+                .requestedTokenType("urn:ietf:params:oauth:token-type:access_token")
+                .subjectTokenType("urn:ietf:params:oauth:token-type:jwt")
+                .subjectToken("fake-token")
+                .build();
+
+        JSONAssert.assertEquals(gson.toJson(expectedTokenRequest), payloadCaptor.getValue(), true);
     }
 
     @Test
@@ -112,11 +136,29 @@ class KubeToGoogleIdTokenClientTest {
     @Test
     void testGenerateIdentityToken() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
-        doReturn("{\"token\":\"fake-id-token\"}").when(spyClient).sendPostRequest(anyString(), anyString(),
-                anyString());
+
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> accessTokenCaptor = ArgumentCaptor.forClass(String.class);
+
+        doReturn("{\"token\":\"fake-id-token\"}").when(spyClient).sendPostRequest(
+                urlCaptor.capture(),
+                payloadCaptor.capture(),
+                accessTokenCaptor.capture());
 
         String idToken = spyClient.generateIdentityToken("fake-access-token", "fake-audience");
         assertEquals("fake-id-token", idToken);
+
+        assertEquals(
+                "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/fake@example.com:generateIdToken",
+                urlCaptor.getValue());
+        GoogleIdentityTokenRequest expectedTokenRequest = GoogleIdentityTokenRequest.builder()
+                .audience("fake-audience")
+                .includeEmail(true)
+                .build();
+
+        JSONAssert.assertEquals(gson.toJson(expectedTokenRequest), payloadCaptor.getValue(), true);
+        assertEquals("fake-access-token", accessTokenCaptor.getValue());
     }
 
     @Test

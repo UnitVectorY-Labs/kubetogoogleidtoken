@@ -29,7 +29,11 @@ import uk.org.webcompere.systemstubs.jupiter.SystemStubsExtension;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 
@@ -117,5 +121,38 @@ class KubeToGoogleIdTokenClientEnvVarTest {
                 .getIdToken(KubeToGoogleIdTokenRequest.builder().audience("https://example.com").build());
         assertNotNull(response);
         assertEquals("fake-access-token", response.getIdToken());
+    }
+
+    @Test
+    void testGetIdTokenNullAudience() {
+        KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
+                .k8sTokenPath(tokenPath.toAbsolutePath().toString()).build();
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> {
+            client.getIdToken(null);
+        });
+        assertEquals("Audience must be specified in the IdTokenRequest.", thrown.getMessage());
+    }
+
+    @Test
+    void testGetIdTokenMissingAudience() {
+        KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
+                .k8sTokenPath(tokenPath.toAbsolutePath().toString()).build();
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> {
+            client.getIdToken(KubeToGoogleIdTokenRequest.builder().build());
+        });
+        assertEquals("Audience must be specified in the IdTokenRequest.", thrown.getMessage());
+    }
+
+    @Test
+    void testGetIdTokenEmptyAudience() {
+        KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
+                .k8sTokenPath(tokenPath.toAbsolutePath().toString()).build();
+
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> {
+            client.getIdToken(KubeToGoogleIdTokenRequest.builder().audience("").build());
+        });
+        assertEquals("Audience must be specified in the IdTokenRequest.", thrown.getMessage());
     }
 }

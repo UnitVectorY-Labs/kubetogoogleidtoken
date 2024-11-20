@@ -96,12 +96,10 @@ public class KubeToGoogleIdTokenClient {
                         if (googleConfiguration.getCredentialSource() != null) {
                             k8sTokenPathValue = googleConfiguration.getCredentialSource().getFile();
                         }
-                        if (googleConfiguration.getAudience() != null) {
-                            stsAudienceValue = googleConfiguration.getAudience();
-                        }
-                        if (googleConfiguration.getTokenUrl() != null) {
-                            tokenUrlValue = googleConfiguration.getTokenUrl();
-                        }
+
+                        stsAudienceValue = googleConfiguration.getAudience();
+                        tokenUrlValue = googleConfiguration.getTokenUrl();
+
                         if (googleConfiguration.getServiceAccountImpersonationUrl() != null) {
                             serviceAccountImpersonationUrlValue = googleConfiguration
                                     .getServiceAccountImpersonationUrl();

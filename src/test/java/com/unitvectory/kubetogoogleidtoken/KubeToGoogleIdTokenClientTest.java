@@ -23,7 +23,10 @@ import java.nio.file.Path;
 import java.io.ByteArrayInputStream;
 import java.net.HttpURLConnection;
 import java.io.OutputStream;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -92,6 +95,18 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
+    void testExchangeTokenWithSTSNoToken() throws Exception {
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        doReturn("{}").when(spyClient).sendPostRequest(anyString(),
+                anyString());
+
+        KubeToGoogleIdTokenException thrown = assertThrows(KubeToGoogleIdTokenException.class, () -> {
+            spyClient.exchangeTokenWithSTS("fake-token", "fake-audience");
+        });
+        assertEquals("STS response does not contain access_token.", thrown.getMessage());
+    }
+
+    @Test
     void testGenerateIdentityToken() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
         doReturn("{\"token\":\"fake-id-token\"}").when(spyClient).sendPostRequest(anyString(), anyString(),
@@ -99,6 +114,18 @@ class KubeToGoogleIdTokenClientTest {
 
         String idToken = spyClient.generateIdentityToken("fake-access-token", "fake-audience");
         assertEquals("fake-id-token", idToken);
+    }
+
+    @Test
+    void testGenerateIdentityTokenNoToken() throws Exception {
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        doReturn("{}").when(spyClient).sendPostRequest(anyString(), anyString(),
+                anyString());
+
+        KubeToGoogleIdTokenException thrown = assertThrows(KubeToGoogleIdTokenException.class, () -> {
+            spyClient.generateIdentityToken("fake-access-token", "fake-audience");
+        });
+        assertEquals("IAM Credentials response does not contain token.", thrown.getMessage());
     }
 
     @Test

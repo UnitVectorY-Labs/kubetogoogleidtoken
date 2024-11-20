@@ -24,6 +24,36 @@ public static void main(String[] args) {
 }
 ```
 
+## Configuration
+
+When using Kubernetes with GCP Workload Identity Federation, the following configuration format is typically used. Instead of explicitely providing the configuration attributes those can be 
+
+```java
+KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder().build();
+```
+
+The path to the following JSON file can be provided with the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+
+```json
+{
+    "universe_domain": "googleapis.com",
+    "type": "external_account",
+    "audience": "//iam.googleapis.com/projects/000000000000/locations/global/workloadIdentityPools/my-identity-pool/providers/my-provider",
+    "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+    "token_url": "https://sts.googleapis.com/v1/token",
+    "credential_source": {
+    "file": "/var/run/secrets/tokens/gcp-token",
+    "format": {
+        "type": "text"
+    }
+    },
+    "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/account@example.iam.gserviceaccount.com:generateAccessToken"
+}
+```
+
+One important note is that the `service_account_impersonation_url` is going to be set to call `:generateAccessToken` by default, but the use case here is for ID Tokens, therefore this client will automatically change that to `:generateIdToken` before making the request.
+
 ## Limitations
 
 - Token caching is not implemented. The client will request a new token for each invocation. It is recommended to cache the token in the application.
+- Custom audiences for Workload Identity Federation are not supported. The default audience pattern of `//iam.googleapis.com/projects/{PROJECT_NUMBER}/locations/global/workloadIdentityPools/{WORKLOAD_IDENTITY_POOL}/providers/{WORKLOAD_PROVIDER}` is used.

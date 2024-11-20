@@ -24,6 +24,6 @@ import lombok.Getter;
 @Getter
 @Builder
 public class KubeToGoogleIdTokenRequest {
-    
+
     private final String audience;
 }

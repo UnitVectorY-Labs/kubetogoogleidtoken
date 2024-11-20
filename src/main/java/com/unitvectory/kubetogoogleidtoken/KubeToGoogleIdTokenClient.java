@@ -37,19 +37,115 @@ import java.nio.file.Paths;
  * @author Jared Hatfield (UnitVectorY Labs)
  */
 @Getter(AccessLevel.PACKAGE)
-@Builder
 public class KubeToGoogleIdTokenClient {
 
-    private static final String STS_URL = "https://sts.googleapis.com/v1/token";
-    private static final String IAM_URL_TEMPLATE = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateIdToken";
+    private static final String DEFAULT_TOKEN_URL = "https://sts.googleapis.com/v1/token";
 
+    private static final String DEFAULT_IMPERSONATION_TEMPLATE = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateIdToken";
+
+    private static final Gson gson = new Gson();
+
+    /**
+     * The URL used to request an access token from the STS service.
+     */
+    private final String tokenUrl;
+
+    /**
+     * The URL used to request an ID token from the IAM Credentials service.
+     */
+    private final String serviceAccountImpersonationUrl;
+
+    /**
+     * The path to the Kubernetes service account token file on the file system.
+     * 
+     * The token must have the audience set to the STS service.
+     */
     private final String k8sTokenPath;
-    private final String projectNumber;
-    private final String workloadIdentityPool;
-    private final String workloadProvider;
-    private final String serviceAccountEmail;
 
-    private final Gson gson = new Gson();
+    /**
+     * The audience for the STS service.
+     */
+    private final String stsAudience;
+
+    @Builder
+    public KubeToGoogleIdTokenClient(
+            Boolean loadEnvironment,
+            String k8sTokenPath,
+            String projectNumber,
+            String workloadIdentityPool,
+            String workloadProvider,
+            String serviceAccountEmail) {
+
+        String k8sTokenPathValue = null;
+        String stsAudienceValue = null;
+
+        String tokenUrlValue = null;
+        String serviceAccountImpersonationUrlValue = null;
+
+        String googleApplicationCredentials = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+        if (googleApplicationCredentials != null) {
+
+            // Try to load the files from the Google Application Credentials if it exists
+            // and was set
+            Path credentialsPath = Paths.get(googleApplicationCredentials);
+            if (Files.exists(credentialsPath)) {
+                try {
+                    GoogleConfiguration googleConfiguration = gson.fromJson(Files.readString(credentialsPath),
+                            GoogleConfiguration.class);
+                    if (googleConfiguration != null) {
+                        if (googleConfiguration.getCredentialSource() != null) {
+                            k8sTokenPathValue = googleConfiguration.getCredentialSource().getFile();
+                        }
+                        if (googleConfiguration.getAudience() != null) {
+                            stsAudienceValue = googleConfiguration.getAudience();
+                        }
+                        if (googleConfiguration.getTokenUrl() != null) {
+                            tokenUrlValue = googleConfiguration.getTokenUrl();
+                        }
+                        if (googleConfiguration.getServiceAccountImpersonationUrl() != null) {
+                            serviceAccountImpersonationUrlValue = googleConfiguration
+                                    .getServiceAccountImpersonationUrl();
+
+                            // If the URL for the service account impersonation is for generating access
+                            // tokens, then change it to generate ID tokens which is what we need
+                            if (serviceAccountImpersonationUrlValue.endsWith(":generateAccessToken")) {
+                                serviceAccountImpersonationUrlValue = serviceAccountImpersonationUrlValue.substring(0,
+                                        serviceAccountImpersonationUrlValue.length() - 20) + ":generateIdToken";
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    // Ignore any exceptions and continue with the default values
+                }
+            }
+        }
+
+        // Override the values if they were set in the builder explicitly
+
+        if (k8sTokenPathValue == null) {
+            k8sTokenPathValue = k8sTokenPath;
+        }
+
+        if (stsAudienceValue == null) {
+            stsAudienceValue = String.format(
+                    "//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
+                    projectNumber, workloadIdentityPool, workloadProvider);
+        }
+
+        if (tokenUrlValue == null) {
+            tokenUrlValue = DEFAULT_TOKEN_URL;
+        }
+
+        if (serviceAccountImpersonationUrlValue == null) {
+            serviceAccountImpersonationUrlValue = String.format(DEFAULT_IMPERSONATION_TEMPLATE, serviceAccountEmail);
+        }
+
+        // Set the final value so this class is immutable
+        this.k8sTokenPath = k8sTokenPathValue;
+        this.stsAudience = stsAudienceValue;
+        this.tokenUrl = tokenUrlValue;
+        this.serviceAccountImpersonationUrl = serviceAccountImpersonationUrlValue;
+    }
 
     /**
      * Generates a GCP ID token for the specified audience.
@@ -59,19 +155,29 @@ public class KubeToGoogleIdTokenClient {
      * @throws KubeToGoogleIdTokenException If any step in the token generation
      *                                      process fails.
      * @throws IllegalArgumentException     If the audience is not specified.
+     * @throws IllegalStateException        If the configuration is not properly
+     *                                      set.
      */
     public KubeToGoogleIdTokenResponse getIdToken(KubeToGoogleIdTokenRequest request) {
         if (request == null || request.getAudience() == null || request.getAudience().isEmpty()) {
             throw new IllegalArgumentException("Audience must be specified in the IdTokenRequest.");
         }
 
+        if (this.tokenUrl == null) {
+            throw new IllegalStateException("Token URL must be specified in the configuration.");
+        } else if (this.serviceAccountImpersonationUrl == null) {
+            throw new IllegalStateException(
+                    "Service Account Impersonation URL must be specified in the configuration.");
+        } else if (this.k8sTokenPath == null) {
+            throw new IllegalStateException("Kubernetes Token Path must be specified in the configuration.");
+        } else if (this.stsAudience == null) {
+            throw new IllegalStateException("STS Audience must be specified in the configuration.");
+        }
+
         // Phase 1: Retrieve Kubernetes Token from the file system
         String k8sToken = retrieveKubernetesToken();
 
         // Phase 2: Exchange Kubernetes Token for Access Token via STS
-        String stsAudience = String.format(
-                "//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
-                projectNumber, workloadIdentityPool, workloadProvider);
         String accessToken = exchangeTokenWithSTS(k8sToken, stsAudience);
 
         // Phase 3: Generate Identity Token via IAM Credentials by GCP Impersonating
@@ -81,7 +187,7 @@ public class KubeToGoogleIdTokenClient {
         return KubeToGoogleIdTokenResponse.builder().idToken(idToken).build();
     }
 
-    private String retrieveKubernetesToken() {
+    String retrieveKubernetesToken() {
         try {
             Path tokenPath = Paths.get(k8sTokenPath);
             if (!Files.exists(tokenPath)) {
@@ -95,7 +201,7 @@ public class KubeToGoogleIdTokenClient {
         }
     }
 
-    private String exchangeTokenWithSTS(String subjectToken, String audience) {
+    String exchangeTokenWithSTS(String subjectToken, String audience) {
         JsonObject stsRequest = new JsonObject();
         stsRequest.addProperty("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange");
         stsRequest.addProperty("audience", audience);
@@ -105,7 +211,7 @@ public class KubeToGoogleIdTokenClient {
         stsRequest.addProperty("subject_token", subjectToken);
 
         try {
-            String response = sendPostRequest(STS_URL, stsRequest.toString(), null);
+            String response = sendPostRequest(this.tokenUrl, stsRequest.toString(), null);
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (!jsonResponse.has("access_token")) {
@@ -120,15 +226,13 @@ public class KubeToGoogleIdTokenClient {
         }
     }
 
-    private String generateIdentityToken(String accessToken, String audience) {
-        String iamUrl = String.format(IAM_URL_TEMPLATE, serviceAccountEmail);
-
+    String generateIdentityToken(String accessToken, String audience) {
         JsonObject iamRequest = new JsonObject();
         iamRequest.addProperty("audience", audience);
         iamRequest.addProperty("includeEmail", true);
 
         try {
-            String response = sendPostRequest(iamUrl, iamRequest.toString(), accessToken);
+            String response = sendPostRequest(this.serviceAccountImpersonationUrl, iamRequest.toString(), accessToken);
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (!jsonResponse.has("token")) {
@@ -143,7 +247,7 @@ public class KubeToGoogleIdTokenClient {
         }
     }
 
-    private String sendPostRequest(String urlStr, String payload, String accessToken) {
+    String sendPostRequest(String urlStr, String payload, String accessToken) {
         try {
             URL url = new URL(urlStr);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

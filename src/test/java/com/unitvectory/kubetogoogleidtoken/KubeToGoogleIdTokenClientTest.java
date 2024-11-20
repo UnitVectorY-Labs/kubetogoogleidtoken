@@ -23,18 +23,19 @@ import org.junit.jupiter.api.Test;
 public class KubeToGoogleIdTokenClientTest {
 
     @Test
-    public void testClientConstruction(){
+    public void testClientConstruction() {
         KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
-            .k8sTokenPath("/tmp/foo")
-            .projectNumber("377054373935")
-            .workloadIdentityPool("minikube")
-            .workloadProvider("minikube")
-            .serviceAccountEmail("fake@example.com").build();
+                .k8sTokenPath("/tmp/foo")
+                .projectNumber("377054373935")
+                .workloadIdentityPool("minikube")
+                .workloadProvider("minikube")
+                .serviceAccountEmail("fake@example.com").build();
 
-        assert(client.getK8sTokenPath().equals("/tmp/foo"));
-        assert(client.getProjectNumber().equals("377054373935"));
-        assert(client.getWorkloadIdentityPool().equals("minikube"));
-        assert(client.getWorkloadProvider().equals("minikube"));
-        assert(client.getServiceAccountEmail().equals("fake@example.com"));
+        assert (client.getK8sTokenPath().equals("/tmp/foo"));
+        assert (client.getStsAudience().equals(
+                "//iam.googleapis.com/projects/377054373935/locations/global/workloadIdentityPools/minikube/providers/minikube"));
+        assert (client.getTokenUrl().equals("https://sts.googleapis.com/v1/token"));
+        assert (client.getServiceAccountImpersonationUrl().equals(
+                "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/fake@example.com:generateIdToken"));
     }
 }

@@ -161,9 +161,7 @@ public class KubeToGoogleIdTokenClient {
             throw new IllegalArgumentException("Audience must be specified in the IdTokenRequest.");
         }
 
-        if (this.tokenUrl == null) {
-            throw new IllegalStateException("Token URL must be specified in the configuration.");
-        } else if (this.serviceAccountImpersonationUrl == null) {
+        if (this.serviceAccountImpersonationUrl == null) {
             throw new IllegalStateException(
                     "Service Account Impersonation URL must be specified in the configuration.");
         } else if (this.k8sTokenPath == null) {

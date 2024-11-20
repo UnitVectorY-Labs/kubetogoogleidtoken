@@ -94,6 +94,24 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
+    void testRetrieveKubernetesTokenNoFile(@TempDir Path tempDir) {
+        Path missingTokenPath = tempDir.resolve("foo");
+
+        client = KubeToGoogleIdTokenClient.builder()
+                .k8sTokenPath(missingTokenPath.toAbsolutePath().toString())
+                .projectNumber("0000000000")
+                .workloadIdentityPool("my-pool")
+                .workloadProvider("my-provider")
+                .serviceAccountEmail("fake@example.com").build();
+
+        KubeToGoogleIdTokenException thrown = assertThrows(KubeToGoogleIdTokenException.class, () -> {
+            client.retrieveKubernetesToken();
+        });
+        assertEquals("Kubernetes token file does not exist: " + missingTokenPath.toAbsolutePath().toString(),
+                thrown.getMessage());
+    }
+
+    @Test
     void testExchangeTokenWithSTS() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
 

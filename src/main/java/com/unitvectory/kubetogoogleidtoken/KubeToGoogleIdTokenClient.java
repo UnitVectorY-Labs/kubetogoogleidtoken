@@ -211,7 +211,7 @@ public class KubeToGoogleIdTokenClient {
         stsRequest.addProperty("subject_token", subjectToken);
 
         try {
-            String response = sendPostRequest(this.tokenUrl, stsRequest.toString(), null);
+            String response = sendPostRequest(this.tokenUrl, stsRequest.toString());
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (!jsonResponse.has("access_token")) {
@@ -245,6 +245,10 @@ public class KubeToGoogleIdTokenClient {
         } catch (Exception e) {
             throw new KubeToGoogleIdTokenException("Failed to generate ID token using IAM Credentials API.", e);
         }
+    }
+
+    String sendPostRequest(String urlStr, String payload) {
+        return sendPostRequest(urlStr, payload, null);
     }
 
     String sendPostRequest(String urlStr, String payload, String accessToken) {

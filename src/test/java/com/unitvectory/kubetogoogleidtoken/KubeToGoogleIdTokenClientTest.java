@@ -40,7 +40,7 @@ class KubeToGoogleIdTokenClientTest {
     private Path tokenPath;
 
     @BeforeEach
-    public void setUp(@TempDir Path tempDir) {
+    void setUp(@TempDir Path tempDir) {
         // Generate a fake token file in the temp directory for testing
         this.tokenPath = tempDir.resolve("foo");
 
@@ -60,7 +60,7 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
-    public void testClientConstruction() {
+    void testClientConstruction() {
         assertEquals(tokenPath.toAbsolutePath().toString(), client.getK8sTokenPath());
         assertEquals(
                 "//iam.googleapis.com/projects/0000000000/locations/global/workloadIdentityPools/my-pool/providers/my-provider",
@@ -72,7 +72,7 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
-    public void testRetrieveKubernetesToken() throws Exception {
+    void testRetrieveKubernetesToken() throws Exception {
         Files.writeString(tokenPath, "fake-token");
 
         String token = client.retrieveKubernetesToken();
@@ -82,7 +82,7 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
-    public void testExchangeTokenWithSTS() throws Exception {
+    void testExchangeTokenWithSTS() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
         doReturn("{\"access_token\":\"fake-access-token\"}").when(spyClient).sendPostRequest(anyString(),
                 anyString());
@@ -92,7 +92,7 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
-    public void testGenerateIdentityToken() throws Exception {
+    void testGenerateIdentityToken() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
         doReturn("{\"token\":\"fake-id-token\"}").when(spyClient).sendPostRequest(anyString(), anyString(),
                 anyString());
@@ -102,7 +102,7 @@ class KubeToGoogleIdTokenClientTest {
     }
 
     @Test
-    public void testSendPostRequest() throws Exception {
+    void testSendPostRequest() throws Exception {
         KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
         HttpURLConnection mockConnection = mock(HttpURLConnection.class);
         OutputStream mockOutputStream = mock(OutputStream.class);

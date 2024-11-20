@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 
 import com.google.gson.Gson;
 import com.unitvectory.kubetogoogleidtoken.GoogleConfiguration.CredentialSource;
@@ -29,6 +30,8 @@ import uk.org.webcompere.systemstubs.jupiter.SystemStubsExtension;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 
 /**
  * Test class for KubeToGoogleIdTokenClient.
@@ -46,7 +49,7 @@ class KubeToGoogleIdTokenClientEnvVarTest {
     private Path tokenPath;
 
     @BeforeEach
-    public void setUp(@TempDir Path tempDir) {
+    void setUp(@TempDir Path tempDir) {
         // Generate a fake token file in the temp directory for testing
         this.tokenPath = tempDir.resolve("foo");
 
@@ -84,7 +87,7 @@ class KubeToGoogleIdTokenClientEnvVarTest {
     }
 
     @Test
-    public void testClientConstruction() {
+    void testClientConstruction() {
 
         KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
                 .k8sTokenPath(tokenPath.toAbsolutePath().toString()).build();
@@ -97,5 +100,22 @@ class KubeToGoogleIdTokenClientEnvVarTest {
         assertEquals(
                 "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/account@example.iam.gserviceaccount.com:generateIdToken",
                 client.getServiceAccountImpersonationUrl());
+    }
+
+    @Test
+    void testGetIdToken() {
+        KubeToGoogleIdTokenClient client = KubeToGoogleIdTokenClient.builder()
+                .k8sTokenPath(tokenPath.toAbsolutePath().toString()).build();
+
+        KubeToGoogleIdTokenClient spyClient = Mockito.spy(client);
+        doReturn("{\"access_token\":\"fake-access-token\"}").when(spyClient).sendPostRequest(anyString(),
+                anyString());
+        doReturn("{\"token\":\"fake-access-token\"}").when(spyClient).sendPostRequest(anyString(),
+                anyString(), anyString());
+
+        KubeToGoogleIdTokenResponse response = spyClient
+                .getIdToken(KubeToGoogleIdTokenRequest.builder().audience("https://example.com").build());
+        assertNotNull(response);
+        assertEquals("fake-access-token", response.getIdToken());
     }
 }

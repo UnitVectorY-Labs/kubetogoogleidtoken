@@ -4,6 +4,18 @@
 
 A Java library for obtaining Google ID tokens by leveraging Kubernetes Service Accounts with GCP Workload Identity Federation.
 
+## Getting Started
+
+This library requires Java 17 and is available in the Maven Central Repository:
+
+```xml
+<dependency>
+    <groupId>com.unitvectory</groupId>
+    <artifactId>kubetogoogleidtoken</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
 ## Usage
 
 The library provides a client that can be used to obtain Google ID tokens. The client requires the following parameters:

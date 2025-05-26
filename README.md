@@ -12,7 +12,7 @@ This library requires Java 17 and is available in the Maven Central Repository:
 <dependency>
     <groupId>com.unitvectory</groupId>
     <artifactId>kubetogoogleidtoken</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
 </dependency>
 ```
 

@@ -4,6 +4,11 @@ config:
   description: "A Java library for obtaining Google ID tokens by leveraging Kubernetes Service Accounts with GCP Workload Identity Federation."
   license: Apache-2.0
   language: java17
+  release_github: true
+  status: active
+  codecov:
+    enabled: true
+    token: DvVSkrR8zW
   maven:
     group_id: com.unitvectory
     artifact_id: kubetogoogleidtoken

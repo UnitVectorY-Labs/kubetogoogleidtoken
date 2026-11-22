@@ -1,14 +1,25 @@
 name: kubetogoogleidtoken
 default_branch: main
 config:
+  osv: sarif
   description: "A Java library for obtaining Google ID tokens by leveraging Kubernetes Service Accounts with GCP Workload Identity Federation."
   license: Apache-2.0
   language: java17
+  release: none
   release_github: true
   status: active
+  justfile: false
+  docs:
+    enabled: false
   codecov:
     enabled: true
     token: DvVSkrR8zW
   maven:
     group_id: com.unitvectory
     artifact_id: kubetogoogleidtoken
+    javadoc: true
+  clip4llm:
+    exclude:
+      - target
+  gitignore:
+    - .vscode/
